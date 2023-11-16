@@ -1,0 +1,27 @@
+ kubectl exec -it -n serengeti-ecosystem serengeti-sts-mariadb-galera-1 -- bash
+
+
+dPtj!2Wkd
+
+
+x-ncp-apigw-timestamp
+1696987063
+Description
+
+x-ncp-iam-access-key
+hweTZwRiHIaAFBOP82kZ
+Description
+
+x-ncp-apigw-signature-v2
+ojapRYyUpMIpUxWDWfj5STxm7ZPBRyzENJRj6xah
+Description
+
+
+hpa
+
+
+kubectl run -i -n wordpress --tty load-generator --rm --image=busybox --restart=Never -- /bin/sh -c "while sleep 0.01; do wget -q -O- http://wordpress ; done"
+
+kubectl run -i --tty load-generator --rm --image=busybox:1.28 --restart=Never -- /bin/sh -c "while sleep 0.01; do wget -q -O- http://wordpress; done"
+
+kubectl run -i --tty load-generator --rm --image=busybox --restart=Never -- /bin/sh -c "while sleep 0.01; do wget -q -O- http://wordpress ; done"

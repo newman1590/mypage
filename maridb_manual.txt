@@ -1,0 +1,434 @@
+
+CREATE DATABASE wordpress
+CREATE USER 'wordpress'@'%' IDENTIFIED BY 'cloit13!#';
+GRANT ALL PRIVILEGES ON *.* TO 'wordpress'@'%';
+flush privileges;
+
+
+sudo docker run -d -p 3306:3306 --name mysql-db -e MYSQL_ROOT_PASSWORD=1234 -v /mysqldata/:/var/lib/mysql mysql --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+
+
+sudo docker run --name wordpress --network some-network -d wordpress -e WORDPRESS_DB_HOST=
+
+DBms	mysql-db	1234
+tablespace	wordpress	
+계정	wordpress	cloit13!#
+
+
+
+/mysqldata/:/var/lib/mysq
+
+
+
+ssh -i testbed.pem ubuntu@133.186.218.204
+
+
+
+
+
+
+
+#############################pv yaml create############################
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-wpdb-001
+spec:
+  capacity:
+    storage: 200Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: sc-wpdb001
+  cinder:
+    fsType: "ext3"
+    volumeID: "f1f8bff0-d2c0-452e-a265-2804bd5cfaf0"
+
+
+#############################pvc yaml create############################
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pvc-wpdb-001
+  namespace: wordpress
+spec:
+  volumeName: pv-wpdb-001
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 200Gi
+  storageClassName: sc-wpdb001
+
+
+
+
+
+
+#############################namespace create############################
+
+$ kubectl create namespace wordpress
+
+
+#############################secret create############################
+1안
+#####################인코딩 후 입력#####################
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mariadb-secret
+type: Opaque
+data:
+  password: Y2xvaXQxMyEjCg==
+  username: cm9vdA==
+
+##########################################
+2안
+##########################################
+$ echo -n 'wordpress' >./username.txt
+$ echo -n 'cloit13!#' >./password.txt 
+
+# Create generic secret object with keys username and password from files
+
+$ kubectl create secret --namespace=wordpress generic mariadb-secret111 --from-file=username=./username.txt --from-file=password=./password.txt
+
+$ kubectl get secret mariadb-secret -n wordpress
+NAME             TYPE     DATA   AGE
+mariadb-secret   Opaque   2      61s
+
+$ kubectl describe secret mariadb-secret
+Name:         mariadb-secret
+Namespace:    default
+Labels:       <none>
+Annotations:  <none>
+
+Type:  Opaque
+
+Data
+====
+username:  4 bytes
+password:  6 bytes
+
+
+$ kubectl get secret mariadb-secret111 -o jsonpath='{.data}' -n wordpress
+{"password":"Y2xvaXQxMyEjCg==","username":"cm9vdA=="}
+
+
+
+# Get data using yaml output
+$ kubectl get secret mariadb-secret -o yaml
+apiVersion: v1
+data:
+  password: c2VjcmV0
+  username: cm9vdA==
+kind: Secret
+metadata:
+  creationTimestamp: "2022-03-21T10:49:24Z"
+  name: mariadb-secret
+  namespace: default
+  resourceVersion: "392508"
+  uid: 25943f12-d47d-4042-b9c6-027646864d3b
+type: Opaque
+
+# Decode base64 encrypted data username
+$ echo "cm9vdA=="|base64 -d
+
+ # output 'root'
+
+
+
+
+#############################maria service create############################
+
+####1안####내부연결 필요시
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb
+spec:
+  ports:
+  - port: 3306
+  selector:
+    app: mariadb
+
+####2안####외부연결 필요시
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb
+  annotations:
+    service.beta.kubernetes.io/openstack-internal-load-balancer: "true"
+spec:
+  loadBalancerIP : 10.0.10.54
+  ports:
+  - port: 3306
+    targetPort: 3306
+    protocol: TCP
+  selector:
+    app: mariadb
+  type: LoadBalancer
+
+
+
+
+#############################maria deploy create############################
+
+#####CR secret 구성#####
+
+kubectl create secret -n wordpress docker-registry wpimage-secret --docker-server=2be61e1b-kr1-registry.container.nhncloud.com/dpgtb-cr --docker-username=2gRoCdJabbK96n427Elh --docker-password=yskLfsH2eHpFTojw
+
+#####mariadb secret 구성#####
+vi mariadbd.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb
+spec:
+  selector:
+    matchLabels:
+      app: mariadb
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+      - image: 2be61e1b-kr1-registry.container.nhncloud.com/dpgtb-cr/mariadb:11.1.2
+        name: mariadb
+        ports:
+        - containerPort: 3306 # Container 포트
+          name: mariadb
+        volumeMounts:
+        - mountPath: /var/lib/mysql # MariaDB 이미지 공식 데이터 저장소 경로
+          subPath: "mysql"
+          name: mariadb-st
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+           secretKeyRef:
+             name: mariadb-secret # Secret의 이름
+             key: password # Secret의 data에 들어간 key:value
+        args: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+      volumes:
+      - name: mariadb-st
+        persistentVolumeClaim:
+          claimName: pvc-wpdb-001 # pv 볼륨 설정
+      imagePullSecrets:
+      - name: dbimage-secret
+
+
+
+
+
+############################# mariadb 접속 ############################
+
+$ kubectl exec -it mariadb-7bbcc5574f-4wgzm -- bash
+
+
+
+
+8. 다른 pod에서 mariadb 접속하기
+아래 명령어 실행 시 10.7 버전의 mariadb pod를 생성하여 기존에 생성한 mariadb pod에 접속하게 된다.
+pod에서 빠져나올 시 만들어진 pod는 자동으로 삭제된다.
+$ kubectl run -it --rm --image=mariadb:10.7 --restart=Never mariadb-client -- mysql -h 10.233.89.123 -p{DB+PASSWORD}
+
+If you don't see a command prompt, try pressing enter.
+MariaDB [(none)]> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| mydata             |
+| mysql              |
+| performance_schema |
+| sys                |
++--------------------+
+5 rows in set (0.000 sec)
+
+MariaDB [(none)]> exit
+Bye
+pod "mariadb-client" deleted
+
+
+
+
+
+
+
+
+############################# nas pvc config ############################
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: wp-public-nas
+spec:
+  capacity:
+    storage: 300Gi
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: sc-wp001
+  csi:
+    driver: nfs.csi.k8s.io
+    readOnly: false
+    volumeHandle: 290e2e9d-4e94-4afc-8671-1bac1549ad30
+    volumeAttributes:
+      server: 10.0.1.47
+      share: /dpgtb-nas-wpweb    #나스 스토리지 이름
+  mountOptions:
+    - hard
+    - nolock
+    - nfsvers=3
+
+
+############################# nas pv config ############################
+
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: wpc-public-nas
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 300Gi
+  volumeName: wp-public-nas
+  storageClassName: sc-wp001
+
+
+
+############################# wordpress - mariadb 접속 configmap설정 ############################
+
+############################# mariadb config ############################
+vi mariadb-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mariadb-configmap
+data:
+  database_url: "10.0.10.54"
+  port: "3306"
+  database: "dpgtb-wp"
+  user: "wordpress"
+
+############################# 인코딩된 secret 생성 ############################
+vi mariadb-secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mariadb-secret
+type: Opaque
+data:
+  password: Y2xvaXQxMyEj
+  username: d29yZHByZXNz
+
+############################# 인코딩된 secret 생성 ############################
+vi wordpress-svc.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+spec:
+  loadBalancerIP : 133.186.221.21
+  selector:
+    app: wordpress
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP #default
+  type: LoadBalancer
+
+
+#####CR secret 구성#####
+kubectl create secret -n wordpress docker-registry wpimage-secret --docker-server=2be61e1b-kr1-registry.container.nhncloud.com/dpgtb-cr --docker-username=2gRoCdJabbK96n427Elh --docker-password=yskLfsH2eHpFTojw
+#####################################deployment 생성 1안 configmap 사용##################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+spec: # specification for deployment resource
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordpress
+  template: # blueprint for Pod
+    metadata:
+      labels:
+        app: wordpress
+    spec: # specification for Pod
+      containers:
+      - name: wordpress
+        image: 2be61e1b-kr1-registry.container.nhncloud.com/dpgtb-cr/wordpress:8.2
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: wp-public-nas
+          mountPath: "/var/www/html"
+        env:
+        - name: WORDPRESS_DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: mariadb-configmap
+              key: database_url
+        - name: WORDPRESS_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mariadb-secret
+              key: password
+        - name: WORDPRESS_DB_USER
+          value: wordpress
+        - name: WORDPRESS_DEBUG
+          value: "1"
+      volumes:
+        - name: wp-public-nas
+          persistentVolumeClaim:
+            claimName: wpc-public-nas
+      imagePullSecrets:
+      - name: wpimage-secret
+
+
+##########################접근확인#################################################################################################
+
+curl -v 10.254.52.211:3306 (dbip: port)
+
+########################################################################################################################################
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+spec: # specification for deployment resource
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordpress
+  template: # blueprint for Pod
+    metadata:
+      labels:
+        app: wordpress
+    spec: # specification for Pod
+      containers:
+      - name: wordpress
+        image: 2be61e1b-kr1-registry.container.nhncloud.com/dpgtb-cr/wordpress:8.2
+        ports:
+        - containerPort: 80
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: 10.0.10.54
+        - name: WORDPRESS_DB_NAME
+          value: dpgtb_wp
+        - name: WORDPRESS_DB_USER
+          value: wordpress
+        - name: WORDPRESS_DB_PASSWORD
+          value: cloit13!#
+      imagePullSecrets:
+      - name: wpimages-secret
+
+
