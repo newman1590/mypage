@@ -1,0 +1,12 @@
+siem : ssh -i dpgtb-siem.pem rocky@133.186.144.16
+
+dpgtb-pub-bastion : ssh -i dpgtb.pem ubuntu@10.0.1.85, ssh -i dpgtb.pem ubuntu@133.186.152.68
+
+dpgtb-pri-bastion : ssh -i dpgtb.pem ubuntu@10.0.1.36, ssh -i dpgtb.pem ubuntu@133.186.222.31
+
+win-bastion : IP - 10.0.1.39
+ID - administrator
+PW - jqT28tQ7aMkSGAQu84FT
+
+
+
