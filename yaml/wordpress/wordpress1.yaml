@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wordpress
+spec: # specification for deployment resource
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wordpress
+  template: # blueprint for Pod
+    metadata:
+      labels:
+        app: wordpress
+    spec: # specification for Pod
+      containers:
+      - name: wordpress
+        image: 2be61e1b-kr1-registry.container.nhncloud.com/dpgtb-cr/wordpress:8.2
+        ports:
+        - containerPort: 80
+        env:
+        - name: WORDPRESS_DB_HOST
+          value: 10.0.10.54
+        - name: WORDPRESS_DB_NAME
+          value: dpgtb_wp
+        - name: WORDPRESS_DB_USER
+          value: wordpress
+        - name: WORDPRESS_DB_PASSWORD
+          value: cloit13!#
+      imagePullSecrets:
+      - name: wpimages-secret

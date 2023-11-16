@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: wordpress
+  namespace: wordpress
+  annotations: 
+     loadbalancer.nhncloud/pool-lb-method: SOURCE_IP
+spec:
+  loadBalancerIP : 133.186.221.21
+  selector:
+    app: wordpress
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP #default
+  type: LoadBalancer

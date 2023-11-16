@@ -1,0 +1,31 @@
+# nginx.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: 2be61e1b-kr1-registry.container.nhncloud.com/dpgtb-cr/nginx:1.0
+        ports:
+        - containerPort: 80
+        volumeMounts:
+          - name: public-nas
+            mountPath: "/app"
+      volumes:
+        - name: public-nas
+          persistentVolumeClaim:
+            claimName: pvc-public-nas
+      imagePullSecrets:
+      - name: dpgtb
