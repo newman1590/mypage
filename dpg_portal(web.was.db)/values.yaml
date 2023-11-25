@@ -1,0 +1,13 @@
+nodeSelector:
+  app.serengeti.io/galera: "true"
+resources:
+  limits:
+    cpu: 2
+    memory: 2048Mi
+initContainers:
+- name: initcontainer
+  image: bitnami/minideb
+  command: ['sh', '-c', 'chmod 777 /bitnami/mariadb']
+  volumeMounts:
+  - name: data
+    mountPath: /bitnami/mariadb

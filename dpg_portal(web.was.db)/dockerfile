@@ -1,0 +1,46 @@
+FROM nginx:latest
+
+WORKDIR /etc/nginx
+
+COPY ./key.pem ./key.pem
+COPY ./cert.pem ./cert.pem
+
+
+
+
+cat docker_build.sh
+docker build -f ./Dockerfile -t nginx:latest .
+
+
+
+########## dockerfile###############
+
+FROM ubuntu:23.10
+
+RUN apt-get -qq update
+RUN apt-get -qq upgrade --yes
+RUN apt-get -qq install curl --yes
+RUN apt-get -qq install nodejs --yes
+RUN apt-get -qq install npm --yes
+RUN apt-get -qq install vim --yes
+RUN apt-get -qq install net-tools --yes
+RUN apt-get -qq install tcpdump --yes
+
+WORKDIR /app/dpg
+
+COPY . .
+
+COPY ./local.js ./server/config/env
+COPY ./development.js ./server/config/env
+COPY ./production.js ./server/config/env
+
+RUN npm install
+RUN npm install -g pm2
+RUN npm install winston
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dpgbackend"]
+
+
+########## dockerbuild ###############

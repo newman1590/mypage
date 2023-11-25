@@ -1,0 +1,123 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nodejs-configmap
+  namespace: dpg-portal
+data:
+  database_url: "10.0.10.112"
+  port: "3306"
+  database: "dpgportaldb"
+  username: dpgportal
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nodejs-secret
+  namespace: dpg-portal
+type: Opaque
+data:
+  username: ZHBncG9ydGFsCg==
+  password: Y2xvaXQxMyEj
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dpgbackend
+  namespace: dpg-portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dpgbackend
+  template:
+    metadata:
+      labels:
+        app: dpgbackend
+    spec:
+      containers:
+      - name: dpgbackend
+        image: 2be61e1b-kr1-registry.container.nhncloud.com/dpgtb-cr/dpgbackend:1.0.2.1
+        imagePullPolicy: Always
+        command: ['sh', '-c', 'npm run dpgbackend']
+        ports:
+        - containerPort: 3000
+          name: dpgbackend
+        volumeMounts:
+        - name: nodejs-volume
+          mountPath: /app/dpg
+        env:
+        - name: DPGTB_DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: nodejs-configmap
+              key: database_url
+        - name: DPGTB_DB_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: nodejs-configmap
+              key: database
+        - name: DPGTB_DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: nodejs-configmap
+              key: port
+        - name: DPGTB_DB_USER
+          valueFrom:
+           secretKeyRef:
+             name: nodejs-secret
+             key: username
+        - name: DPGTB_DB_PASSWORD
+          valueFrom:
+           secretKeyRef:
+             name: nodejs-secret
+             key: password
+        - name: NODE_ENV
+          value: "production"
+        resources:
+          limits:
+            cpu: "500m"
+          requests:
+            cpu: "400m"
+      volumes:
+      - name: nodejs-volume
+        persistentVolumeClaim:
+          claimName: dpgtb-backend-pvc-nas
+      imagePullSecrets:
+      - name: pt-secret
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: dpgbackend-hpa
+   namespace: dpg-portal
+spec:
+  maxReplicas: 10
+  minReplicas: 2
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: dpgbackend
+  metrics:
+  - type: Resource 
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dpgbackend
+  namespace: dpg-portal
+  annotations:
+    service.beta.kubernetes.io/openstack-internal-load-balancer: "true"
+spec:
+  loadBalancerIP : 10.0.10.111
+  selector:
+    app: dpgbackend
+  ports:
+    - port: 3000
+      targetPort: 3000
+      protocol: TCP #default
+  type: LoadBalancer

@@ -1,0 +1,115 @@
+$ curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/master/scripts/get-helm-3
+$ chmod 700 get_helm.sh
+$ ./get_helm.sh
+
+$ helm version
+version.BuildInfo{Version:"v3.4.0", GitCommit:"7090a89efc8a18f3d8178bf47d2462450349a004", GitTreeState:"clean", GoVersion:"go1.14.10"}
+
+$ helm search hub wordpress
+
+$ helm search repo
+
+$ helm repo add brigade https://brigadecore.github.io/charts
+$ helm repo add bitnami https://charts.bitnami.com/bitnami
+
+$ helm search repo brigade
+
+$ helm search repo bitnami |grep mariadb
+
+$ helm install --generate-name bitnami/mariadb --namespace database >> 기존 제공하는 이름 그대로
+
+$ helm install mariadb-sts stable/mariadb  >>  이름 변경
+
+$ helm install --generate-name bitnami/mariadb --namespace database --set persistence.storageClass=pvc-dynamic
+
+helm install dpgtb-mariadb --namespace dpg-portal --set rootUser.password=root,db.user=dpgportal,password=cloit13!# -f values.yaml bitnami/mariadb
+
+helm install dpgtb-mariadb --namespace dpg-portal --set rootUser.password=root,db.user=dpgportal,password=cloit13!# -f values.yaml bitnami/mariadb
+
+helm install --generate-name bitnami/mariadb --namespace dpg-portal -f value.yaml
+
+helm delete -n database $(helm list -n database | awk '{if(NR>2)print $1}')
+
+
+
+##############################galera###########################################
+
+helm install dpgtb -n dpg-portal --set global.storageClass=csi-sc --set persistence.size=50Gi --set rootUser.password=cm9vdA== --set galera.mariabackup.password=cm9vdA== --set service.type=NodePort --set service.nodePorts.mysql=32767 --values ./values.yaml oci://registry-1.docker.io/bitnamicharts/mariadb-galera
+
+helm install dpgtb -n dpg-portal -f --values ./values.yaml oci://registry-1.docker.io/bitnamicharts/mariadb-galera
+
+helm install dpgtb -n dpg-portal --set service.type=NodePort --set service.nodePorts.mysql=32767 --values ./values.yaml oci://registry-1.docker.io/bitnamicharts/mariadb-galera
+
+    helm upgrade --namespace dpg-portal dpgtb oci://registry-1.docker.io/bitnamicharts/mariadb-galera \
+      --set rootUser.password=$(kubectl get secret --namespace dpg-portal dpgtb-mariadb-galera -o jsonpath="{.data.mariadb-root-password}" | base64 -d) \
+      --set db.name=my_database \
+      --set galera.mariabackup.password=$(kubectl get secret --namespace dpg-portal dpgtb-mariadb-galera -o jsonpath="{.data.mariadb-galera-mariabackup-password}" | base64 -d)
+
+
+helm install --name air-mariadb --namespace persistence --set rootUser.password=root#,db.user=air,password=air# -f values.yaml stable/mariadb
+
+helm delete -n dpg-portal dpgtb
+
+mysql -u root -pcm9vdA== -h 10.0.10.87 -P 32767
+mysql -u dpgtb_user -pcloit13!# -h 10.0.10.87 -P 32767
+
+
+
+
+> show status like 'wsrep_%';
+
+> create database test_db;
+Query OK, 1 row affected (0.005 sec)
+> use test_db;
+Database changed
+> create table test_tb ( id int primary key );
+Query OK, 0 rows affected (0.021 sec)
+> insert into test_tb values(1);
+Query OK, 1 row affected (0.020 sec)
+
+
+galera 정지:
+
+kubectl scale statefulset dpgtb-mariadb-galera --replicas=0 -n dpg-portal
+
+Galera 클러스터 노드 강제 중지:
+
+kubectl delete pod -n dpg-portal <pod-name> --force --grace-period=0
+
+2be61e1b-kr1-registry.container.nhncloud.com/dpgtb-cr/maridb-galera:11.1.3
+
+
+
+** Please be patient while the chart is being deployed **
+Tip:
+
+  Watch the deployment status using the command:
+
+    kubectl get sts -w --namespace dpg-portal -l app.kubernetes.io/instance=dpgtb
+
+MariaDB can be accessed via port "3306" on the following DNS name from within your cluster:
+
+    dpgtb-mariadb-galera.dpg-portal.svc.cluster.local
+
+To obtain the password for the MariaDB admin user run the following command:
+
+    echo "$(kubectl get secret --namespace dpg-portal dpgtb-mariadb-galera -o jsonpath="{.data.mariadb-root-password}" | base64 -d)"
+
+To connect to your database run the following command:
+
+    kubectl run dpgtb-mariadb-galera-client --rm --tty -i --restart='Never' --namespace dpg-portal --image docker.io/bitnami/mariadb-galera:11.1.3-debian-11-r0 --command -- mysql -h dpgtb-mariadb-galera -P 3306 -uroot -p$(kubectl get secret --namespace dpg-portal dpgtb-mariadb-galera -o jsonpath="{.data.mariadb-root-password}" | base64 -d) my_database
+
+To connect to your database from outside the cluster execute the following commands:
+
+    export NODE_IP=$(kubectl get nodes --namespace dpg-portal -o jsonpath="{.items[0].status.addresses[0].address}")
+    export NODE_PORT=$(kubectl get --namespace dpg-portal -o jsonpath="{.spec.ports[0].nodePort}" services dpgtb-mariadb-galera)
+    mysql -h $NODE_IP -P $NODE_PORT -uroot -p$(kubectl get secret --namespace dpg-portal dpgtb-mariadb-galera -o jsonpath="{.data.mariadb-root-password}" | base64 -d) my_database
+
+To upgrade this helm chart:
+
+    helm upgrade --namespace dpg-portal dpgtb oci://registry-1.docker.io/bitnamicharts/mariadb-galera \
+      --set rootUser.password=$(kubectl get secret --namespace dpg-portal dpgtb-mariadb-galera -o jsonpath="{.data.mariadb-root-password}" | base64 -d) \
+      --set db.name=my_database \
+      --set galera.mariabackup.password=$(kubectl get secret --namespace dpg-portal dpgtb-mariadb-galera -o jsonpath="{.data.mariadb-galera-mariabackup-password}" | base64 -d)
+
+helm delete -n database $(helm list -n database | awk '{if(NR>2)print $1}')

@@ -1,0 +1,190 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dpgtb-nginx-configmap
+  namespace: dpg-portal
+data:
+  nginx.conf: |
+    user  nginx;
+    worker_processes  5;
+
+    error_log  /var/log/nginx/error.log warn;
+    pid        /var/run/nginx.pid;
+
+    events {
+        worker_connections  1024;
+    }
+
+    http {
+
+        include       /etc/nginx/mime.types;
+        default_type  application/octet-stream;
+
+        proxy_buffer_size 100M;
+        proxy_buffers 32 100M;
+        client_max_body_size 100M;
+
+        upstream dpgbackend {
+            ip_hash;
+
+            server 10.0.10.101:3000;
+        }
+
+        upstream dpgtestbed {
+            ip_hash;
+
+            server 10.0.10.102:3000;
+        }
+
+        server {
+            listen 80;
+            return 301 https://$host$request_uri;
+        }
+
+        server {
+            listen 443 ssl;
+            server_name dpgtestbed.kr;
+
+            location / {
+                proxy_pass https://dpgbackend;
+
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host $host;
+                proxy_cache_bypass $http_upgrade;
+            }
+
+            ssl_certificate     /etc/nginx/cert.pem;
+            ssl_certificate_key /etc/nginx/key.pem;
+            ssl_session_cache shared:SSL:1m;
+            ssl_session_timeout 5m;
+            ssl_ciphers HIGH:MEDIUM:!SSLv2:!PSK:!SRP:!ADH:!AECDH;
+            ssl_prefer_server_ciphers on;
+            location / {
+               root html;
+               index index.html index.htm;
+            }
+        }
+
+        server {
+            listen 443 ssl;
+            server_name tb.dpgtestbed.kr;
+
+            location / {
+                proxy_pass https://dpgtestbed;
+
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host $host;
+                proxy_cache_bypass $http_upgrade;
+            }
+
+            ssl_certificate     /etc/nginx/cert.pem;
+            ssl_certificate_key /etc/nginx/key.pem;
+            ssl_session_cache shared:SSL:1m;
+            ssl_session_timeout 5m;
+            ssl_ciphers HIGH:MEDIUM:!SSLv2:!PSK:!SRP:!ADH:!AECDH;
+            ssl_prefer_server_ciphers on;
+            location / {
+               root html;
+               index index.html index.htm;
+            }
+        }
+
+        server {
+            listen 443 ssl;
+            server_name backoffice.dpgtestbed.kr;
+
+            location / {
+                proxy_pass https://dpgbackend;
+
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection 'upgrade';
+                proxy_set_header Host $host;
+                proxy_cache_bypass $http_upgrade;
+            }
+
+            ssl_certificate     /etc/nginx/cert.pem;
+            ssl_certificate_key /etc/nginx/key.pem;
+            ssl_session_cache shared:SSL:1m;
+            ssl_session_timeout 5m;
+            ssl_ciphers HIGH:MEDIUM:!SSLv2:!PSK:!SRP:!ADH:!AECDH;
+            ssl_prefer_server_ciphers on;
+            location / {
+               root html;
+               index index.html index.htm;
+            }
+        }
+
+        log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                          '$status $body_bytes_sent "$http_referer" '
+                          '"$http_user_agent" "$http_x_forwarded_for"';
+
+        access_log  /var/log/nginx/access.log  main;
+
+        sendfile        on;
+        #tcp_nopush     on;
+
+        keepalive_timeout  65;
+
+        gzip  on;
+
+        include /etc/nginx/conf.d/*.conf;
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dpgtb-nginx
+  namespace: dpg-portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: 2be61e1b-kr1-registry.container.nhncloud.com/dpgtb-cr/nginx:1.25.4
+        ports:
+        - containerPort: 80
+        - containerPort: 443
+        volumeMounts:
+        - name: dpgtb-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+      imagePullSecrets:
+      - name: pt-secret
+      volumes:
+      - name: dpgtb-config
+        configMap:
+          name: dpgtb-nginx-configmap
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dpgtb-nginx
+  namespace: dpg-portal
+  annotations:
+    loadbalancer.nhncloud/pool-lb-method: SOURCE_IP
+spec:
+  loadBalancerIP : 180.210.83.214
+  selector:
+    app: nginx
+  ports:
+    - protocol: TCP
+      name: http
+      port: 80
+      targetPort: 80
+    - protocol: TCP
+      name: https
+      port: 443
+      targetPort: 443
+  type: LoadBalancer
